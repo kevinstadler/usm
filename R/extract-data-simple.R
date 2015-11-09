@@ -57,34 +57,36 @@ maxdecaydifference <- function(alpha, gamma) {
 }
 
 simplesummary <- function(conditions=allconditions, runs=1:24) {
-  allruns <- data.frame()
   alltransitions <- data.frame()
   for (run in runs) {
-    print(paste("Run", run, "of", length(runs)))
+    print(paste("Run", run))
     for (i in 1:nrow(conditions)) {
       data <- read.table(paste(run, resultfilename(conditions[i,]), sep="/"))
       transitions <- segmentrun(data[,1], 0.05)
       ntransitions <- nrow(transitions)
-      ncompleted <- 0
+      #ncompleted <- 0
       if (ntransitions > 0) {
-        ncompleted <- nrow(subset(transitions, success==1))
+        #ncompleted <- nrow(subset(transitions, success==1))
         for (j in 1:nrow(transitions)) {
           f <- if (transitions[j,"poslow"]) min else max
+          transitions[j,"t0"] <- if (transitions[j,"success"] == 0)  NA else match(transitions[j,"poslow"]==1, data[transitions[j,"start"]:transitions[j,"end"],1] >= 0.5)-1
           transitions[j,"mmax"] <- f(data[transitions[j,"start"]:transitions[j,"end"],5])/maxdecaydifference(conditions[i,"a"], conditions[i,"a"]*conditions[i,"m"])
           transitions[j,"xmax"] <- f(data[transitions[j,"start"]:transitions[j,"end"],1])
           alltransitions <- rbind(alltransitions, c(run=run, conditions[i,], transitions[j,]))
         }
       }
     } # incremental writeout
-    allruns <- rbind(allruns, c(run=run, conditions[i,], dur=nrow(data), nactuations=ntransitions, ntransitions=ncompleted))
-    write.table(alltransitions, "../simpletransitions.csv")
-    write.table(allruns, "../simpleruns.csv")
+    write.table(alltransitions, "~/simpletransitions.csv", row.names=FALSE, append=TRUE)
   }
   return(alltransitions)
 }
 
-if (file.exists("../simpletransitions.csv")) {
-  x <- read.table("../simpletransitions.csv", header=TRUE)
+if (file.exists("~/simpletransitions.csv")) {
+  x <- read.table("~/simpletransitions.csv", header=TRUE)
 } else {
-  system.time(x <- simplesummary())
+  library(doParallel)
+  registerDoParallel(cores=8)
+  system.time(x <- foreach(run=1:24, .combine=rbind) %dopar% simplesummary(allconditions, run))
+  write.table(alltransitions, "~/simpletransitions.csv", row.names=FALSE)
+  # allruns <- rbind(allruns, c(run=run, conditions[i,], dur=nrow(data), nactuations=ntransitions, ntransitions=ncompleted))
 }
