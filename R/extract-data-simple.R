@@ -14,8 +14,7 @@ resultfilename <- function(pars) {
 }
 
 # column names of the individual runs
-colnames <- c("meanx", "sdx", "minx", "maxx", "meanm", "sdm", "minm", "maxm")
-# column names of the run summaries
+colnames <- c("x", "xsd", "xmin", "xmax", "m", "msd", "mmin", "mmax")
 
 # perform a simple segmentation based on crossing thresholds
 # returns a dataframe with columns start, end, poslow (1 for low), success (0 for interrupted changes)
@@ -61,17 +60,17 @@ simplesummary <- function(conditions=allconditions, runs=1:24) {
   for (run in runs) {
     print(paste("Run", run))
     for (i in 1:nrow(conditions)) {
-      data <- read.table(paste(run, resultfilename(conditions[i,]), sep="/"))
-      transitions <- segmentrun(data[,1], 0.05)
+      data <- read.table(paste(run, resultfilename(conditions[i,]), sep="/"), col.names=colnames)
+      transitions <- segmentrun(data$x, 0.05)
       ntransitions <- nrow(transitions)
       #ncompleted <- 0
       if (ntransitions > 0) {
         #ncompleted <- nrow(subset(transitions, success==1))
         for (j in 1:nrow(transitions)) {
-          f <- if (transitions[j,"poslow"]) min else max
-          transitions[j,"t0"] <- if (transitions[j,"success"] == 0)  NA else match(transitions[j,"poslow"]==1, data[transitions[j,"start"]:transitions[j,"end"],1] >= 0.5)-1
-          transitions[j,"mmax"] <- f(data[transitions[j,"start"]:transitions[j,"end"],5])/maxdecaydifference(conditions[i,"a"], conditions[i,"a"]*conditions[i,"m"])
-          transitions[j,"xmax"] <- f(data[transitions[j,"start"]:transitions[j,"end"],1])
+          f <- if (transitions[j,"poslow"]) max else min
+          transitions[j,"t0"] <- if (transitions[j,"success"] == 0)  NA else match(transitions[j,"poslow"]==1, data$x[transitions[j,"start"]:transitions[j,"end"]] >= 0.5)-1
+          transitions[j,"mmax"] <- f(data$m[transitions[j,"start"]:transitions[j,"end"]])/maxdecaydifference(conditions[i,"a"], conditions[i,"a"]*conditions[i,"m"])
+          transitions[j,"xmax"] <- f(data$x[transitions[j,"start"]:transitions[j,"end"]])
           alltransitions <- rbind(alltransitions, c(run=run, conditions[i,], transitions[j,]))
         }
       }
@@ -88,5 +87,4 @@ if (file.exists("~/simpletransitions.csv")) {
   registerDoParallel(cores=8)
   system.time(x <- foreach(run=1:24, .combine=rbind) %dopar% simplesummary(allconditions, run))
   write.table(alltransitions, "~/simpletransitions.csv", row.names=FALSE)
-  # allruns <- rbind(allruns, c(run=run, conditions[i,], dur=nrow(data), nactuations=ntransitions, ntransitions=ncompleted))
 }
